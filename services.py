@@ -1,8 +1,12 @@
 import requests
 import asyncio
 import aiohttp
+from ormar.exceptions import NoMatch 
 import json
+from datetime import datetime
 
+
+from models import Review, Answer
     
 def get_total(): #Функция получения общего числа отзывов
     url = 'https://api.delivery-club.ru/api1.2/reviews?chainId=48274&limit=1&offset=0&cacheBreaker=1668100117'
@@ -17,9 +21,7 @@ async def get_data(session, url, offset):
 
     async with session.get(url=url) as response:
         response_json = await response.json()
-
-        with open(f'jsons/{offset}.json', 'w') as jsonfile:
-            json.dump(response_json, jsonfile, ensure_ascii=False)
+        return response_json
 
 
 
@@ -32,7 +34,6 @@ async def start_parser(): #Управляющая функция парсера
     tasks = [] #Список заданий на парсинг
     async with aiohttp.ClientSession() as session:
         while True:
-            print(offset)
             if offset+step > total and offset < total: #Проверка не выходим ли за значения общего числа
                 #Если выходим то считаем сколько осталось и добавляем последнее задание и выходим из цикла
                 step = total-offset
@@ -47,11 +48,65 @@ async def start_parser(): #Управляющая функция парсера
 
             offset += step
         
-        await asyncio.gather(*tasks)
-#total = 35613
-#step = 3500
-#offse = 35000
-#step = total-postiton = 613
+        data = await asyncio.gather(*tasks)
+
+        for item in data:
+            for review in item['reviews']:
+                review_data = {
+                    'id': review['orderHash'],
+                    'author': review['author'],
+                    'body': review['body'],
+                    'rated': datetime.strptime(review['rated'], "%Y-%m-%dT%H:%M:%S%z"),
+                    'icon': review['icon']
+                }
+                review_object = await create_review(review_data=review_data)
+                for answer in review['answers']:
+                    answer_data = {
+                        'id': answer['publicUuid'],
+                        'text': answer['answer'],
+                        'created_at': datetime.strptime(answer['createdAt'], "%Y-%m-%dT%H:%M:%S%z"),
+                    }
+                    answer_object = await create_answer(answer_data)
+                    await review_object.answers.add(answer_object)
+
+        return data
+
+
+async def create_review(review_data):
+    try:
+        review_object = await Review.objects.update_or_create(
+            id=review_data['id'], 
+            author=review_data['author'],
+            body=review_data['body'],
+            rated=review_data['rated'],
+            icon=review_data['icon']
+        ) 
+    except NoMatch:
+        review_object = await Review.objects.create(
+            id=review_data['id'], 
+            author=review_data['author'],
+            body=review_data['body'],
+            rated=review_data['rated'],
+            icon=review_data['icon']
+        ) 
+    return review_object
+
+async def create_answer(answer_data):
+    try:
+        answer_object = await Answer.objects.update_or_create(
+            id=answer_data['id'], 
+            text=answer_data['text'], 
+            created_at=answer_data['created_at']
+        )
+    except NoMatch:
+        answer_object = await Answer.objects.create(
+            id=answer_data['id'],
+            text=answer_data['text'], 
+            created_at=answer_data['created_at']
+        )
+    return answer_object
+            
+
 
 
 if __name__ == '__main__':
