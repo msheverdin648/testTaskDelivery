@@ -2,7 +2,6 @@ import requests
 import asyncio
 import aiohttp
 from ormar.exceptions import NoMatch 
-import json
 from datetime import datetime
 
 
@@ -17,7 +16,7 @@ def get_total(): #Функция получения общего числа от
 
 
 async def get_data(session, url, offset):
-
+    #Функция получение пака данных
 
     async with session.get(url=url) as response:
         response_json = await response.json()
@@ -73,6 +72,7 @@ async def start_parser(): #Управляющая функция парсера
 
 
 async def create_review(review_data):
+    #Функция создающая обхект отзыва для бд
     try:
         review_object = await Review.objects.update_or_create(
             id=review_data['id'], 
@@ -92,6 +92,7 @@ async def create_review(review_data):
     return review_object
 
 async def create_answer(answer_data):
+    #Функция создающая обхект ответа на отзыв для бд
     try:
         answer_object = await Answer.objects.update_or_create(
             id=answer_data['id'], 
@@ -106,8 +107,3 @@ async def create_answer(answer_data):
         )
     return answer_object
             
-
-
-
-if __name__ == '__main__':
-    asyncio.run(start_parser())
